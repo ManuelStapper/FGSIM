@@ -28,9 +28,12 @@ IDs = IDlookup$ID
 ### Unweighted
 
 sam = list()
+sam2 = list()
 for(i in 1:401){
   set.seed(i)
   sam[[i]] = wspsample(distrS[IDlookup$JsonNr[i]], 1000, pop, weighted = F)
+  set.seed(401 + i)
+  sam2[[i]] = wspsample(distrS[IDlookup$JsonNr[i]], 1000, pop, weighted = F)
 }
 
 # Now fit LN and save parameters
@@ -50,7 +53,13 @@ gerPars = data.frame(iO   = rep(0, 80601),
 counter = 1
 for(i in 1:401){
   for(j in i:401){
-    temp = fitLN(sam[[i]], sam[[j]], IDlookup$JsonNr[i], IDlookup$JsonNr[j], distrS, pop, gravity = T)
+    sami = sam[[i]]
+    if(i == j){
+      samj = sam2[[i]]
+    }else{
+      samj = sam[[j]]
+    }
+    temp = fitLN(sami, samj, IDlookup$JsonNr[i], IDlookup$JsonNr[j], distrS, pop, gravity = T)
     gerPars$iO[counter]   = i
     gerPars$iD[counter]   = j
     gerPars$dist[counter] = temp$mu[1]
@@ -71,9 +80,12 @@ for(i in 1:401){
 
 ### Weighted
 samW = list()
+samW2 = list()
 for(i in 1:401){
   set.seed(i)
   samW[[i]] = wspsample(distrS[IDlookup$JsonNr[i]], 1000, pop, weighted = T)
+  set.seed(401 + i)
+  samW2[[i]] = wspsample(distrS[IDlookup$JsonNr[i]], 1000, pop, weighted = T)
 }
 
 gerParsW = gerPars
@@ -81,7 +93,13 @@ gerParsW = gerPars
 counter = 1
 for(i in 1:401){
   for(j in i:401){
-    temp = fitLN(samW[[i]], samW[[j]], IDlookup$JsonNr[i], IDlookup$JsonNr[j],
+    sami = samW[[i]]
+    if(i == j){
+      samj = samW2[[i]]
+    }else{
+      samj = samW[[j]]
+    }
+    temp = fitLN(sami, samj, IDlookup$JsonNr[i], IDlookup$JsonNr[j],
                  distrS, pop, gravity = T)
     gerParsW$iO[counter]   = i
     gerParsW$iD[counter]   = j
@@ -99,3 +117,4 @@ for(i in 1:401){
   }
 }
 
+write.csv(gerParsW, "gerParsW.csv")
