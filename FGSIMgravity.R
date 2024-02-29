@@ -4,15 +4,27 @@
 ### For gravity model weights                   ###
 ###################################################
 
+# Settings:
+# pars:          A list that is in the global environment and contains
+#                dist, pO, pD, s11, s12, ..., s33 & maybe others
+# maxlag:        To truncate the maximum lag considered
+# normalize:     Shall weights be row-normalised?
+# log:           If true, parameters are sign restricted
+# initial:       Initial values for parameters
+# from0:         If FALSE, intra-district weights are zero
+# areaScale:     Apply area scaling?
+# contactScale:  Apply area scaling?
+# popScale:      Apply area scaling?
+
 W_gravity = function(pars,
-                   maxlag = Inf,
-                   normalize = TRUE,
-                   log = FALSE,
-                   initial = if(log) c(0, 0, 0) else c(1, 1, 1),
-                   from0 = TRUE,
-                   areaScale = FALSE,
-                   contactScale = FALSE,
-                   popScale = FALSE){
+                    maxlag = Inf,
+                    normalize = TRUE,
+                    log = FALSE,
+                    initial = if(log) c(0, 0, 0) else c(1, 1, 1),
+                    from0 = TRUE,
+                    areaScale = FALSE,
+                    contactScale = FALSE,
+                    popScale = FALSE){
   if(contactScale){
     if(!areaScale){
       areaScale = T

@@ -7,15 +7,16 @@
 ######################################################
 
 # Settings:
-# maxlag:     To truncate the maximum lag considered
-# pars:       A list that is in the global environment and contains
-#             dist & sigma2 & M (if CT) & pop (if PT)
-# normalize:  Shall weights be row-normalised?
-# log:        If true, parameters are sign restricted
-# initial:    Initial values for parameters
-# from0:      If FALSE, intra-district weights are zero
-# CT:         Contact transformation?
-# PT:         Population transformation?
+# pars:          A list that is in the global environment and contains
+#                dist & sigma11 & maybe others
+# maxlag:        To truncate the maximum lag considered
+# normalize:     Shall weights be row-normalised?
+# log:           If true, parameters are sign restricted
+# initial:       Initial values for parameters
+# from0:         If FALSE, intra-district weights are zero
+# areaScale:     Apply area scaling?
+# contactScale:  Apply area scaling?
+# popScale:      Apply area scaling?
 
 W_pdist = function(pars,
                    maxlag = Inf,

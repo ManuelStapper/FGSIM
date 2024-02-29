@@ -17,8 +17,6 @@
 ### derivatives are needed (0 = only weights, 1 = 1st, 2 = 2nd)
 ### Replaced by checking if W1 and/or W2 is NA
 
-any(is.na(list(matrix(0, nrow = 2, ncol = 2))))
-
 # Row normalisation for one parameter
 helperRN = function(W, W1 = NA, W2 = NA){
   n = dim(W)[1]
