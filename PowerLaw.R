@@ -16,7 +16,18 @@
 # contactScale:  Apply area scaling?
 # popScale:      Apply area scaling?
 
-W_pdist = function(pars = NA,
+removeNAmat = function(x){
+  x[is.na(x)] = 0
+  x[is.infinite((x))] = 0
+  return(x)
+}
+
+removeNAlist = function(x){
+  x = lapply(x, removeNAmat)
+  return(x)
+}
+
+W_powerlaw2 = function(pars = NA,
                    maxlag = Inf,
                    normalize = TRUE,
                    log = FALSE,
@@ -24,20 +35,11 @@ W_pdist = function(pars = NA,
                    from0 = TRUE,
                    areaScale = FALSE,
                    contactScale = FALSE,
+                   symmScale = FALSE,
                    popScale = FALSE){
-  if(contactScale){
-    if(!areaScale){
-      areaScale = T
-      warning("areaScale set to TRUE for contact scaling")
-    }
-    if(!popScale){
-      popScale = T
-      warning("popScale set to TRUE for contact scaling")
-    }
-  }
   
   pn = names(pars)
-  if(any(is.na(pars)) & any(c(areaScale, popScale, contactScale))) stop("pars must be provided")
+  if(any(is.na(pars)) & any(c(areaScale, popScale))) stop("pars must be provided")
   if(areaScale & (!("area" %in% pn))) stop("pars must contain an element area for areaScale")
   if(popScale & (!("pop" %in% pn))) stop("pars must contain an element pop for popScale")
   if(contactScale & (!("M" %in% pn))) stop("pars must contain an element M for contactScale")
@@ -104,13 +106,37 @@ W_pdist = function(pars = NA,
                                      quote(out <- helperRN(out$W, out$W1, out$W2))))
     body(d2weights) <- as.call(append(as.list(body(d2weights)),
                                       quote(out <- helperRN(out$W, out$W1, out$W2))))
-    
+
+    body(weights) <- as.call(append(as.list(body(weights)),
+                                    quote(out <- helperT(out$W, out$W1, out$W2))))
+    body(dweights) <- as.call(append(as.list(body(dweights)),
+                                     quote(out <- helperT(out$W, out$W1, out$W2))))
+    body(d2weights) <- as.call(append(as.list(body(d2weights)),
+                                      quote(out <- helperT(out$W, out$W1, out$W2))))
+
+
     body(weights) <- as.call(append(as.list(body(weights)),
                                     quote(out <- helperC(powerlawPars$M, out$W, out$W1, out$W2))))
     body(dweights) <- as.call(append(as.list(body(dweights)),
                                      quote(out <- helperC(powerlawPars$M, out$W, out$W1, out$W2))))
     body(d2weights) <- as.call(append(as.list(body(d2weights)),
                                       quote(out <- helperC(powerlawPars$M, out$W, out$W1, out$W2))))
+
+    body(weights) <- as.call(append(as.list(body(weights)),
+                                    quote(out <- helperT(out$W, out$W1, out$W2))))
+    body(dweights) <- as.call(append(as.list(body(dweights)),
+                                     quote(out <- helperT(out$W, out$W1, out$W2))))
+    body(d2weights) <- as.call(append(as.list(body(d2weights)),
+                                      quote(out <- helperT(out$W, out$W1, out$W2))))
+  }else{
+    if(symmScale){
+      body(weights) <- as.call(append(as.list(body(weights)),
+                                      quote(out <- helperSYM(out$W, out$W1, out$W2))))
+      body(dweights) <- as.call(append(as.list(body(dweights)),
+                                       quote(out <- helperSYM(out$W, out$W1, out$W2))))
+      body(d2weights) <- as.call(append(as.list(body(d2weights)),
+                                        quote(out <- helperSYM(out$W, out$W1, out$W2))))
+    }
   }
   
   if(popScale){
@@ -141,11 +167,11 @@ W_pdist = function(pars = NA,
   }
   
   body(weights) <- as.call(append(as.list(body(weights)),
-                                  quote(out$W)))
+                                  quote(removeNAmat(out$W))))
   body(dweights) <- as.call(append(as.list(body(dweights)),
-                                   quote(out$W1[[1]])))
+                                   quote(removeNAmat(out$W1[[1]]))))
   body(d2weights) <- as.call(append(as.list(body(d2weights)),
-                                    quote(out$W2[[1]])))
+                                    quote(removeNAmat(out$W2[[1]]))))
   
   return(list(w = weights, dw = dweights, d2w = d2weights, initial = initial))
 }

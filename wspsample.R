@@ -1,4 +1,4 @@
-### Function to sample coordinated from a district
+### Function to sample coordinates from a district
 ### Samples a total of n observations, n at a time uniformly in the district
 ### then uses population density to either accept a sample or reject
 ### until a total of n observations are accepted.
@@ -7,45 +7,37 @@
 # n:        Sample size
 # pop:      Population raster
 # weighted: Use population as weights?
+
 wspsample = function(poly, n, pop, weighted = F){
   # population data cropped to the MBR of the district
-  popi    = crop(pop, poly)
+  popi    = mask(crop(pop, poly), poly)
   # Obtain all population values in the district's MBR
   popAll  = values(popi)
   # Remove NAs
-  popAll[is.na(popAll)] = 0
-  # Find maximum population
-  M       = max(popAll)
-  # Sample uniformly
-  sam1_df = spsample(poly, n, "random")@coords
-  # Get population for samples locations
-  p = extract(popi, sam1_df)
-  # Calculate acceptance probabilities
-  # Excludes zero-population locations also for unweighted approach
-  if(weighted){
-    acc = p / M
-  }else{
-    acc = p > 0
-  }
-  # Check which locations are accepted
-  indKeep = which(acc >= runif(n))
-  # Initiate output data
-  out = sam1_df[indKeep, ]
+  indKeep = which(!is.na(popAll))
+  # Population without any NA or zero
+  popAll = popAll[indKeep]
+  # Respective coordinates
+  co = coordinates(popi)[indKeep, ]
   
-  # Repeat above steps until we have enough points
-  while(nrow(out) < n){
-    sam1_df = spsample(poly, n, "random")@coords
-    p = extract(popi, sam1_df)
-    p[is.na(p)] = 0
-    if(weighted){
-      acc = p / M
-    }else{
-      acc = p > 0
-    }
-    indKeep = which(acc >= runif(n))
-    out = rbind(out, sam1_df[indKeep, ])
+  if(weighted){
+    w = popAll/sum(popAll)
+  }else{
+    w = as.numeric(popAll > 0)
   }
-  out[1:n, ]
+  
+  # Sample indices
+  ind = sample(x = 1:length(popAll), size = n, replace = T, prob = w)
+  out = cbind(co[ind, ], 0)
+  
+  # Jittering to avoid duplicates in sample 
+  delta1 = min(diff(sort(unique(co[, 1]))))
+  delta2 = min(diff(sort(unique(co[, 2]))))
+  out[, 1] = out[, 1] + runif(n)*delta1 - delta1/2
+  out[, 2] = out[, 2] + runif(n)*delta2 - delta2/2
+  out[, 3] = popAll[ind]
+  
+  return(out)
 }
 
 # Notes:
@@ -60,4 +52,7 @@ wspsample = function(poly, n, pop, weighted = F){
 
 # 1) could be misleading for small sample sizes
 # 2) is slow because of repeated checking and potentially huge MBRs
-# 3) is a good trade-off and implemented below
+# 3) is a good trade-off and implemented
+
+
+

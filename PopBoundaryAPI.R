@@ -54,4 +54,3 @@ getJSON = function(countryCode, level = 1, timeout = 100){
 # An alternative would be:
 # install_github("wmgeolab/rgeoboundaries")
 # library(rgeoboundaries)
-# ger0 = gb_adm0("germany")
