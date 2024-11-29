@@ -1,49 +1,96 @@
 # FGSIM - Fine Grid Spatial Interaction Matrix
 
-The objective of this repo is to provide an extension to the hhh4 function of the surveillance package. It allows to use newly defined weight matrices that shall capture the closeness of administrative districts.
+This repo is a toolbox that serves as an addon to the [surveillance](https://cran.r-project.org/web/packages/surveillance/index.html) package and its hhh4 function for spatio-temporal modeling of disease spread.
 
-## Idea
-To define the closeness of two districts $i$ and $j$, we define $D_{ij}$ as the distance between two randomly selected individuals, one from district $i$ and one from $j$. Due to the random selection of individuals, $D_{ij}$ is a random variable. The distribution of $D_{ij}$ depends on the selection procedure. We can either select individuals while taking into account how a district's population is distributed across the district or we can select a location inside the district assuming uniform distribution of individuals across the district. Both selection procedures yield a distribution of $D_{ij}$ that is well approximated by a LogNormal distribution. Let $\mu_{ij}$ and $\sigma^2_{ij}$ be the parameters of the LogNormal distribution. Following the idea of powerlaw models, we define raw weights as $$W_{ij} = \text{E}\left(D_{ij}^{-d}\right) = \exp\left(-d \mu_{ij} + \frac{d^2\sigma_{ij}^2}{2}\right)$$ where $d$ is a decay parameter. The parameters $\mu_{ij}$ and $\sigma_{ij}^2$ are estimated by simulation. By the definition of raw weights, we can express the closeness of a district to itself, i.e. $W_{ii}$ is well-defined.
+In spatio-temporal models, we need to specify the transmission between districts in a weight matrix. Common approaches are based on the adjacency of districts / the neighbourhood structure, which depends on where district boundaries are. The methods provided here are based on different distance measures serve two purposes:
 
-Using a similar idea, gravity model weights can be derived. Let $P_i$ and $P_j$ be the population densities at locations of randomly selected individuals. It is assumed that not only the distance follows a LogNormal distribution, but that the triple $(D_{ij}, P_i, P_j)$ follows a multivariate LogNormal, i.e. the log of the three components follows a multivariate Normal. Let $\mu_{ij}$ and $\Sigma_{ij}$ be the parameters of that distribution. The gravity, or attraction with with an individual of district $i$ is pulled to district $j$, is defined as $$D_{ij}^{-d_1}P_i^{-d_2}P_j^{d_3} .$$
-If all decay parameters are positive, the force of attraction decreases with increasing distance between districts and with increasing population density in the district of origin. Districts with larger population densities have a larger attraction on other individuals. Since $D_{ij}$, $P_i$ and $P_j$ are assumed to be random variables, we compute raw weights as
-$$W_{ij} = \text{E}\left( D_{ij}^{-d_1}P_i^{-d_2}P_j^{d_3} \right) = \exp\left(d'\mu_{ij} + \frac{d'\Sigma_{ij}d}{2}\right)$$
-where $d = (-d_1, -d_2, d_3)'$.
+1) Transmission risk is modeled on the individual level instead of the district level to reduce the influence of boundary locations and to unify the definition of transmission risk for intra- and inter-district transmission
 
-## Code Overview
-The repo provides functions for data preparation, that is carried out before the application and functions to compute weight matrices.
+2) Detailed population density data is included in hope to improve forecast performance and to enable risk mapping on resolution finer than the observed district level
 
-`PopBoundaryAPI.R` contains two function to load data on district boundaries and population density on a fine grid. Population density data is downloaded from [Worldpop](https://www.worldpop.org/), district boundaries are downloaded from [geoBoundaries](https://github.com/wmgeolab/geoBoundaries).
+## Theory
 
-`wspsample.R` contains a function to sample points inside a selected district. Users can select to sample either individuals according to population density data (`weighted = TRUE`) or locations uniformly across the district (`weighted = FALSE`).
+When modeling the risk of transmitting disease in a spatio-temporal setting, we typically express the risk as a function of a distance measure. For example if we use the order of neighbourhood as distance $D$, it is common to assume a power law relationship between distance and transmission risk $D \mapsto D^{-d}$. A similar idea is used by the approach provided here. Instead of defining a distance measure on a district level, we define it on the individual level, i.e. if we select two individuals at random, one infected and one susceptible, we can for example compute the beeline distance $B$ between them. Is it reasonable to assume that the transmission risk decays with increasing distance between them, we may also assume a power law relationship, i.e. $B^{-d}$. Due to the random selection of an infected and a susceptible person, the distance measure between them is a random variable. Given that we selected individuals from certain districts, we can derive the distribution of the distance between individuals from population density data. Then, we can aggregate the random risk measure $B^{-d}$ to the district level by taking the expectation and use it to construct a weight matrix. As a distribution to fit, the truncated LogNormal distribution is a good choice, since it accounts for positivity and boundedness of distance measures and yields a closed form expectation of $B^{-d}$. Fitting a mixture of truncated LogNormals increases flexibility and preserves those properties.
 
-`fitLN.R` takes samples of two districts (from `wspsample`) and computes estimates of the LogNormal parameters. If both samples are weighted, the resulting distribution gives the distance between individuals from districts. If the first sample is weighted and the second sample is uniform, the resulting distribution gives the distance between an individual from a district of origin $i$ and a location in the destination district $j$.
+This toolbox is designed for applications with spatio-temporal data, i.e. time series of infection counts for different districts. With such a data set the following steps are needed:
 
-`RawWeights.R` contains three functions to compute raw weights and the first two derivatives w.r.t the decay parameter(s). Either the approach based only on distances, the gravity model or a powerlaw applied to neighbourhood order.
+### 1) Downloading district boundaries
+#### $\rightarrow$ PopBoundaryAPI.R
 
-`DerivativeHelper.R` provides functions that carry out transformations of weights and their derivatives. Four transformations are considered:
-1) Row normalisation: $W_{ij} \rightarrow \frac{W_{ij}}{\sum_{k = 1}^n W_{ik}}$
-2) Log-transformation of parameters: $d \rightarrow exp(d)$
-3) Scaling the columns by a diagonal matrix ($P$): $W \rightarrow W \cdot P$
-4) Translating weights to contact probabilities: $W \rightarrow W \cdot M \cdot W^{T}$
+The function `getJSON` downloads shapefiles with district boudnaries.
 
-`FGSIMdistance.R` provides the function that computes weights not including gravity effects. Similar to the `W_powerlaw` function of the `surveillance` package, it can be used as
+### 2) Downloading population density data
+#### $\rightarrow$ PopBoundaryAPI.R
 
-`W_pdist(pars, maxlag, normalize, log, initial, from0, areaScale, popScale, contactScale)`
+The function `getPOP` downloads population density data from [Worldpop](https://worldpop.org) and saves it in a raster file.
 
-Setting `maxlag` to a finite integer sets weights to zero if two districts have a neighbouring order larger that the maximum lag selected. `pars` needs to be a list with at least two entries `dist` and `s11` that contain the mean and variance parameter of the LogNormal distribution. Each needs to be an $n\times n$ matrix where $n$ is the number of districts. `normalize` is set to `TRUE` if the rows of the matrix shall be normalized. If we want to estimate $d$ with the restriction that is positive, we set `log` to `TRUE`. `initial` shall provide a starting value of $d$ for estimation and `from0` can be set to `FALSE` if we want to set diagonal elements of the weight matrix to zero. The three transformations `areaScale`, `popScale` and `contactScale` are motivated as follows:
 
-`areaScale`: If we treat the raw weights as attraction of a location in $j$ on an individual from $i$, we can account for different district areas, i.e. number of locations, by scaling the column of weights by the destination area. In that case, the argument `pars` needs to contain a daigonal matrix `area`. For numerical stability, is is reasonable to scale the matrix to have unit determinant. Normalising the rows afterwards, the resulting weights then approximate the probability that an individual from $i$ moves to district $j$.
+### 3) Match boundary data and population density data to case data districts 
 
-`contactScale`: If we interpret initial weights $W_{ij}$ as probabilities that an individual from $i$ is in district $j$, we may want to account for two individuals having contact in a third district. The probability that two individuals are in the same district is computed as $W\dot W^{T}$, iterating over all districts the two individuals might meet in. Since districts may exhibit very different characteristics in area and population density, we can include the probability that two individuals have contact given that they are in the same district. If we define a diagonal matrix $M$ such that $M_{ii}$ gives the probability of two individuals having contact, given that they are in district $i$, we define contact probabilities as $W \dot M \dot W^{T}$. There are different ways of defining elements $M_{ii}$: Either we can make use of the distribution of $D_{ii}$ and compute $M_{ii} = P(D_{ii}  \le \epsilon)$ for some small value of $\epsilon$. On the other hand we can define "having contact" as being in the same 100m by 100m gridcell. If we set `contactScale` to `TRUE`, the list `pars` must contain a matrix `M`, which for stability shall be scaled to have unit determinant.
+Needs to be done by hand.
 
-`popScale`: Starting with weights $W_{ij}$ that are interpreted as the probability that an individual from $i$ has contact with an individual from $j$, we can account for different population sizes in districts $j$ by applying the population scaling. That means, we multiply the columns of weights by the corresponding district's population size to obtain the expected number of contacts an individual from $i$ has had with individuals from $j$. If we then normalise rows of the weight matrix, $W_{ij}$ is interpreted as the probability that an individual from $i$ has had contact with an individual from district $j$ given that the individual from $i$ has had contact with one individual. 
+### 4) Sampling individuals in each district according to population density #### $\rightarrow$ wspsample.R
 
-`FGSIMgravity.R` provides a weight function that does include gravity effects. Similar to above case, we use is as
+The function `wspsample` takes a polygon from the shapefile (step 1), a sample size and population density data (step 2) as input and returns a sample of locations where individuals live. The output is a matrix where each row contains coordinates and the population estimate in the corresponding 100m x 100m grid cell. The boolean argument `weighted` specifies if the sampling should be weighted by population. 
 
-`W_gravity(pars, maxlag, normalize, log, initial, from0, areaScale, popScale, contactScale)`
+### 5) Compute distance measure between individuals
+#### $\rightarrow$ Distances.R
 
-In contrast to the `W_pdist` function, we provide the LogNormal parameters as a list containing entries: `dist, pO, pD, s11, s12, s13, s22, s23, s33`. The former three are the mean parameters for the distance, population in the district of origin and district of destination respectively. `s11`, ... are the elements of the covariance matrix. Each of the nine entries again needs to be an $n \times n$ matrix. The initial values `initial` now need to be a vector of length 3.
+Different distance measures are implemented that each take two matrices of coordinates as input, one from an origin district and one from the destination district. The argument `pairwise` specifies if distances shall be computed pairwise, and the argument `log` if the distances shall be returned in logs.
 
-`PowerLaw.R`: This file contains a wrapper function that is similar to `W_powerlaw` from the `surveillance` package but allows to apply above three transformation steps `areaScale`, `popScale` and `contactScale`.
+Currently implemented are:
+- `beeline`: Beeline distance
+- `travelTime`: The time to travel from one point to another (by car, in minutes)
+- `gravity`: Like the beeline distance but in addition the ratio of population densities at origin and destination is returned as well
+- `circle`: Needs additional input. From the population (step 2), create a matrix (`as.matrix(pop)`) and an extent object (`extent(pop)`). It then computes the population in a circle around the origin that touches the destination. It makes use of the midpoint circle algorithm and C++ for speed-up.
+- `radiation`: Similar to the `circle` measure $C$, but also includes population dennsity at origin $P_O$ and destination $P_D$. It is the inverse of the radiation formula for human migration such that larger $R$ indicates larger distance.
+$$
+R = \frac{(P_o + C)\cdot(P_O + P_D + C)}{P_O\cdot P_D}
+$$
 
+### 6) Fitting a distribution to each sample of distances
+#### $\rightarrow$ Fitting.R
+
+Using the sample of distances (step 5), a mixture of truncated LogNormal distributions is fitted. For the gravity model, a function fits a mixture of untruncated bivariate Normal distributions. It uses an EM algorithm for estimation and returns the estimates as well as the BIC to determine the number of mixture components.
+
+### 7) Saving parameter estimates
+
+To use the fitted distributions in a weight function for `hhh4`, they must be saved in a list with elements
+- `mu`: Mean parameters
+- `sigma`: Standard deviation parameters
+- `w`: Weights
+- `l`: Lower bound of distance measure (in logs)
+- `u`: Upper bound of distance measure (in logs)
+- `pop`: diagonal matrix of district population
+
+The first three elements should be of dimension $N\times N \times k$, where $N$ is the number of districts and $k$ the number of mixture components. The bounds are assumed to be equal for all mixture compoments, thus of dimension $N\times N$, and the population matrix is also of dimension $N\times N$.
+
+For the gravity model, the distance measure is two dimensional, thus we have list elements `mu1` and `mu2` instead of `mu` for mean parameters and 
+`sigma1`, `sigma2` and `sigma12` instead of `sigma` for the elements of the variance covariance matrix.
+
+
+### 8) Defining how weights are computed in hhh4
+#### $\rightarrow$ W_fgsim
+
+Finally, we define weights for `hhh4` with the function `W_fgsim`. It is similar to the `W_powerlaw` function in `surveillance` and returns a list of functions that are used to compute weights and their derivatives as well as initial values for the decay parameter. Its arguments are
+
+- `pars`: List of parameters (step 7)
+- `truncPL`: Shall the power law be truncated: Instead of translating distances $D$ to $D^{-d}$, it would translate to $\min\{D^{-d}, \delta^{-d}\}$, where $\delta$ is a threshold parameter that is estimated. 
+- `gravity`: Set to TRUE if the distance measure is `gravity`
+- `maxlag`: The maximum neighbourhood order with non-zero weights
+- `normalize`: Shall rows of the weight matrix be normalised?
+- `log`: Are parameters estimated in logs to ensure positivity?
+- `initial`: Initial values for estimation
+- `from0`: If `TRUE`, weights are also computed for intra-district transmission
+- `popScale`: If `TRUE`, the weights are multiplied by the population size of the destination district to account for heterogeneity
+
+
+### References
+
+- [Barbosa H. et al. (2018) **Human mobility: Models and applications**, Physics Reports, 734:1–74.](https://doi.org/10.1016/j.physrep.2018.01.001)
+- [Giraud, T. (2022) **osrm: Interface Between R and the OpenStreetMap-Based Routing Service OSRM**, Journal of Open Source Software, 7(78), 4574.](https://cran.r-project.org/web/packages/osrm/osrm.pdf)
+- [Held L., Höhle M., Hofmann M. (2005) **A statistical framework for the analysis of multivariate infectious disease surveillance counts**, Statistical Modelling, 5(3):187–199.](https://doi.org/10.1191/1471082X05st098oa)
+- [Meyer S., Held L. (2014) **Power-law models for infectious disease spread**, The Annals of Applied Statistics, 8(3), 1612–1639.](https:/doi.org/10.1214/14-AOAS743)
+- [Meyer S., Held L., Höhle M. (2017) **Spatio-Temporal Analysis of Epidemic Phenomena Using the R Package surveillance**, Journal of Statistical Software, 77(11), 1–55.](https://cran.r-project.org/web/packages/surveillance/index.html)
+- [Runfola D. et al. (2020) **geoboundaries: A global database of political administrative boundaries**, PLoS ONE, 15(4).](https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0231866)
+- [WorldPop (2018) **Global high resolution population denominators project**, opp1134076.](https://worldpop.org)
